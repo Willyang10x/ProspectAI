@@ -16,9 +16,12 @@ from google.genai import types
 
 load_dotenv()
 
-# O .strip() limpa espaços vazios ou quebras de linha acidentais no ficheiro .env
 GOOGLE_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+
+# Esconde a chave do Maps temporariamente para o SDK do Gemini não se confundir
+if "GOOGLE_API_KEY" in os.environ:
+    del os.environ["GOOGLE_API_KEY"]
 
 SEU_NOME = os.getenv("SEU_NOME", "Seu Nome")
 SUA_OFERTA = os.getenv(
@@ -176,27 +179,34 @@ def gerar_mensagens(l: dict, nicho: str, cliente) -> dict:
         
     dados = {k: l[k] for k in ("nome", "endereco", "site", "nota", "avaliacoes", "diagnostico")}
     dados["nicho"] = nicho
+    prompt = json.dumps(dados, ensure_ascii=False)
     
-    try:
-        prompt = json.dumps(dados, ensure_ascii=False)
-        # Atualizado para a nova sintaxe do google.genai
-        resp = cliente.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json"
+    tentativas = 3
+    for t in range(tentativas):
+        try:
+            resp = cliente.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    response_mime_type="application/json"
+                )
             )
-        )
-        msgs = json.loads(resp.text)
-        
-        if not all(k in msgs for k in ("whatsapp", "instagram", "email_assunto", "email_corpo", "followup")):
-            raise ValueError("JSON incompleto")
+            msgs = json.loads(resp.text)
             
-        return msgs
-    except Exception as e:
-        print(f"   ! IA falhou para {l['nome']} ({e}); usando modelo padrão.")
-        return mensagem_fallback(l)
+            if not all(k in msgs for k in ("whatsapp", "instagram", "email_assunto", "email_corpo", "followup")):
+                raise ValueError("JSON incompleto")
+                
+            return msgs
+            
+        except Exception as e:
+            # Se for erro de tráfego, espera e tenta de novo
+            if "503" in str(e) and t < tentativas - 1:
+                print(f"   - Servidor do Gemini ocupado. Tentando novamente em 3 segundos... ({t+1}/{tentativas})")
+                time.sleep(3)
+            else:
+                print(f"   ! IA falhou para {l['nome']} ({e}); usando modelo padrão.")
+                return mensagem_fallback(l)
 
 def wa_link(l: dict, texto: str) -> str:
     return f"https://wa.me/{l['whatsapp']}?text={quote(texto)}" if l["whatsapp"] else ""
@@ -275,7 +285,6 @@ def main():
     
     cliente = None
     if GEMINI_KEY and not args.sem_ia:
-        # Nova inicialização do cliente GenAI
         cliente = genai.Client(api_key=GEMINI_KEY)
     else:
         print("Sem chave do Gemini (ou --sem-ia): usando mensagens-modelo.")
