@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { MessageCircle, Star, Globe, AlertCircle, Copy, LayoutDashboard, Target, ServerCrash, Search, GripVertical } from "lucide-react";
+import { 
+  MessageCircle, Star, Globe, AlertCircle, Copy, 
+  LayoutDashboard, Target, ServerCrash, Search, GripVertical, 
+  X, MapPin, Phone, Mail, Send, Maximize2 
+} from "lucide-react";
 
 type Lead = {
   id: string;
@@ -32,14 +36,20 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [erroServidor, setErroServidor] = useState(false);
   
-  // Estados para a Busca
   const [nicho, setNicho] = useState("");
   const [cidade, setCidade] = useState("");
   const [buscando, setBuscando] = useState(false);
 
+  const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
+
   useEffect(() => {
     carregarLeads();
   }, []);
+
+  useEffect(() => {
+    if (leadSelecionado) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'auto';
+  }, [leadSelecionado]);
 
   const carregarLeads = async () => {
     try {
@@ -54,11 +64,8 @@ export default function Home() {
     }
   };
 
-  // ---- FUNÇÕES DE DRAG & DROP E MUDANÇA DE STATUS ----
   const mudarStatus = async (id: string, novoStatus: string) => {
-    // 1. Atualização Otimista (Muda na UI instantaneamente)
     setLeads(leads.map(l => l.id === id ? { ...l, status: novoStatus } : l));
-    // 2. Guarda no Backend (JSON) em background
     try {
       await axios.put(`http://localhost:8000/api/leads/${id}/status?status=${novoStatus}`);
     } catch (error) {
@@ -71,7 +78,7 @@ export default function Home() {
   };
 
   const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault(); // Permite soltar o card
+    e.preventDefault();
   };
 
   const onDrop = (e: React.DragEvent, coluna: string) => {
@@ -80,7 +87,6 @@ export default function Home() {
     if (leadId) mudarStatus(leadId, coluna);
   };
 
-  // ---- FUNÇÃO DA BARRA DE BUSCA ----
   const iniciarProspeccao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nicho || !cidade) return alert("Preencha o nicho e a cidade!");
@@ -88,12 +94,9 @@ export default function Home() {
     setBuscando(true);
     try {
       await axios.post("http://localhost:8000/api/prospectar", {
-        nicho,
-        cidade,
-        maximo: 10, // Define quantos quer procurar
-        top: 3      // Define quantos a IA vai gerar mensagem
+        nicho, cidade, maximo: 10, top: 3 
       });
-      await carregarLeads(); // Atualiza a tela com os novos leads
+      await carregarLeads();
       setNicho("");
       setCidade("");
     } catch (error) {
@@ -104,10 +107,10 @@ export default function Home() {
     }
   };
 
-  const copiarTexto = (texto: string) => {
+  const copiarTexto = (texto: string | undefined) => {
     if (texto) {
       navigator.clipboard.writeText(texto);
-      alert("Mensagem copiada com sucesso!");
+      alert("Copiado com sucesso!");
     }
   };
 
@@ -136,14 +139,14 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans selection:bg-orange-500/30 overflow-hidden flex flex-col">
       
-      {/* Cabeçalho Premium com Barra de Busca */}
-      <header className="sticky top-0 z-50 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5 px-8 py-4 flex items-center justify-between shadow-2xl shadow-black">
+      {/* CABEÇALHO */}
+      <header className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between shadow-2xl shadow-black">
         <div className="flex items-center gap-6">
           <div className="relative group cursor-pointer flex items-center justify-center">
             <div className="absolute -inset-2 bg-gradient-to-r from-orange-600 to-amber-500 rounded-full blur-xl opacity-20 group-hover:opacity-50 transition duration-700"></div>
             <img src="/logo-prospectAI.svg" alt="ProspectAI Logo" className="relative h-14 w-auto drop-shadow-2xl transition-transform duration-500 group-hover:scale-105" />
           </div>
-          <div className="flex flex-col hidden md:flex">
+          <div className="flex flex-col hidden lg:flex">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-1">
               Prospect<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-400">AI</span>
             </h1>
@@ -153,123 +156,66 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Formulário de Busca Integrado */}
         <form onSubmit={iniciarProspeccao} className="flex items-center gap-2 bg-[#121212] p-1.5 rounded-2xl border border-white/10 shadow-inner">
-          <input 
-            type="text" 
-            placeholder="Nicho (ex: Clínicas)" 
-            value={nicho} onChange={e => setNicho(e.target.value)}
-            disabled={buscando}
-            className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-40 focus:ring-0 disabled:opacity-50"
-          />
+          <input type="text" placeholder="Nicho (ex: Clínicas)" value={nicho} onChange={e => setNicho(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-32 md:w-40 focus:ring-0 disabled:opacity-50"/>
           <div className="w-px h-6 bg-white/10"></div>
-          <input 
-            type="text" 
-            placeholder="Cidade (ex: SP)" 
-            value={cidade} onChange={e => setCidade(e.target.value)}
-            disabled={buscando}
-            className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-40 focus:ring-0 disabled:opacity-50"
-          />
-          <button 
-            type="submit" 
-            disabled={buscando}
-            className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold py-2 px-5 rounded-xl text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20"
-          >
-            {buscando ? (
-              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> IA Processando...</>
-            ) : (
-              <><Search size={16} /> Buscar Leads</>
-            )}
+          <input type="text" placeholder="Cidade (ex: SP)" value={cidade} onChange={e => setCidade(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-32 md:w-40 focus:ring-0 disabled:opacity-50"/>
+          <button type="submit" disabled={buscando} className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold py-2 px-4 md:px-5 rounded-xl text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20">
+            {buscando ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div><span className="hidden md:inline">Buscando...</span></> : <><Search size={16} /><span className="hidden md:inline">Prospectar</span></>}
           </button>
         </form>
 
-        <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-6 py-2.5 rounded-full shadow-inner">
+        <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-5 py-2.5 rounded-full shadow-inner">
           <LayoutDashboard size={18} className="text-orange-400" />
-          <span className="text-sm font-semibold tracking-wide text-white"><span className="text-orange-400 font-bold">{leads.length}</span> leads</span>
+          <span className="text-sm font-semibold tracking-wide text-white"><span className="text-orange-400 font-bold">{leads.length}</span><span className="hidden md:inline"> leads</span></span>
         </div>
       </header>
 
-      {/* Kanban Board com Drag & Drop */}
-      <main className="p-8 flex-1 overflow-hidden flex flex-col">
-        <div className="flex gap-6 overflow-x-auto pb-4 h-full snap-x scrollbar-thin scrollbar-thumb-orange-500/20 scrollbar-track-transparent">
+      {/* KANBAN BOARD - AGORA COM FLEX-1 PARA CABER NA TELA */}
+      <main className="p-6 flex-1 overflow-hidden flex flex-col w-full">
+        <div className="flex gap-4 overflow-x-auto pb-4 h-full w-full scrollbar-thin scrollbar-thumb-orange-500/20 scrollbar-track-transparent">
           {COLUNAS.map((coluna) => (
-            <div 
-              key={coluna} 
-              onDragOver={onDragOver}
-              onDrop={(e) => onDrop(e, coluna)}
-              className="snap-start shrink-0 w-[380px] flex flex-col gap-4 h-full"
-            >
+            <div key={coluna} onDragOver={onDragOver} onDrop={(e) => onDrop(e, coluna)} className="flex-1 min-w-[260px] flex flex-col gap-4 h-full">
               
-              <div className="flex items-center justify-between bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md shadow-lg shrink-0">
-                <h2 className="font-extrabold text-slate-200 uppercase tracking-widest text-xs flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full shadow-lg ${
-                    coluna === 'novo' ? 'bg-orange-500 shadow-orange-500/50' : 
-                    coluna === 'fechado' ? 'bg-emerald-500 shadow-emerald-500/50' : 
-                    coluna === 'reunião' ? 'bg-amber-400 shadow-amber-400/50' :
-                    'bg-slate-500 shadow-slate-500/50'
-                  }`}></div>
+              {/* CABEÇALHO DA COLUNA */}
+              <div className="flex items-center justify-between bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md shadow-lg shrink-0">
+                <h2 className="font-extrabold text-slate-200 uppercase tracking-widest text-xs flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full shadow-lg ${coluna === 'novo' ? 'bg-orange-500' : coluna === 'fechado' ? 'bg-emerald-500' : coluna === 'reunião' ? 'bg-amber-400' : 'bg-slate-500'}`}></div>
                   {coluna}
                 </h2>
-                <span className="bg-black/60 border border-white/10 text-orange-400 px-3 py-1 rounded-full text-xs font-black shadow-inner">
+                <span className="bg-black/60 border border-white/10 text-orange-400 px-2.5 py-0.5 rounded-full text-xs font-black shadow-inner">
                   {leads.filter((l) => (l.status || "novo") === coluna).length}
                 </span>
               </div>
 
-              {/* Área Soltável (Drop Zone) */}
-              <div className="flex flex-col gap-4 flex-1 overflow-y-auto pr-2 pb-10 scrollbar-none">
+              {/* ÁREA DOS CARTÕES */}
+              <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1 pb-10 scrollbar-none">
                 {leads.filter((l) => (l.status || "novo") === coluna).map((lead) => (
-                  <div 
-                    key={lead.id} 
-                    draggable
-                    onDragStart={(e) => onDragStart(e, lead.id)}
-                    className="group relative bg-[#121212] border border-white/5 hover:border-orange-500/40 p-5 rounded-2xl shadow-xl transition-all duration-300 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-orange-500/10"
-                  >
-                    
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} className="group relative bg-[#121212] border border-white/5 hover:border-orange-500/40 p-4 rounded-xl shadow-xl transition-all duration-300 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-orange-500/10">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
-                    <div className="flex justify-between items-start mb-4 gap-4">
-                      <div className="flex items-start gap-2">
-                        <GripVertical size={20} className="text-slate-600 mt-1 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <h3 className="font-bold text-white text-lg leading-snug group-hover:text-orange-400 transition-colors">{lead.nome}</h3>
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                      <div className="flex items-start gap-1.5">
+                        <GripVertical size={18} className="text-slate-600 mt-1 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        <h3 
+                          onClick={() => setLeadSelecionado(lead)}
+                          className="font-bold text-white text-base leading-snug hover:text-orange-400 transition-colors cursor-pointer flex items-center gap-2 group/title"
+                        >
+                          {lead.nome}
+                          <Maximize2 size={14} className="text-slate-500 group-hover/title:text-orange-400 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0" />
+                        </h3>
                       </div>
-                      <span className="shrink-0 bg-gradient-to-br from-orange-500 to-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-lg shadow-orange-900/40 border border-orange-400/20">
-                        {lead.score}
-                      </span>
+                      <span className="shrink-0 bg-gradient-to-br from-orange-500 to-red-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black shadow-lg border border-orange-400/20">{lead.score}</span>
                     </div>
 
-                    <div className="text-sm text-slate-400 space-y-3 mb-5 bg-white/[0.02] p-4 rounded-xl border border-white/5 pointer-events-none">
-                      {lead.nota && (
-                        <p className="flex items-center gap-2">
-                          <Star size={16} className="text-amber-400 fill-amber-400/20" /> 
-                          <span className="text-white font-bold">{lead.nota}</span> 
-                          <span className="text-slate-500">({lead.avaliacoes} avs)</span>
-                        </p>
-                      )}
-                      {lead.site && (
-                        <p className="flex items-center gap-2">
-                          <Globe size={16} className="text-slate-500" /> 
-                          <span className="text-orange-400 truncate">Possui Link</span>
-                        </p>
-                      )}
-                      {lead.diagnostico && lead.diagnostico !== "site ok" && (
-                        <div className="flex items-start gap-3 bg-red-500/5 border border-red-500/10 p-3 rounded-lg mt-2">
-                          <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
-                          <p className="text-red-300/80 text-xs font-medium leading-relaxed">{lead.diagnostico}</p>
-                        </div>
-                      )}
+                    <div className="text-xs text-slate-400 space-y-1.5 mb-3 bg-white/[0.02] p-2.5 rounded-lg border border-white/5 pointer-events-none mt-3">
+                      {lead.nota && <p className="flex items-center gap-1.5"><Star size={14} className="text-amber-400" /> <span className="text-white font-bold">{lead.nota}</span> ({lead.avaliacoes} avs)</p>}
+                      <p className="flex items-start gap-1.5"><AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{lead.diagnostico}</span></p>
                     </div>
 
-                    <div className="flex gap-3 flex-wrap relative z-10">
-                      {lead.whatsapp && lead.wa_link && (
-                        <a href={lead.wa_link} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white border border-[#25D366]/20 px-3 py-2 rounded-xl text-xs font-bold transition-all">
-                          <MessageCircle size={16} /> Chamar
-                        </a>
-                      )}
-                      <button onClick={() => copiarTexto(lead.mensagens?.whatsapp || "")} className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-orange-500/10 hover:text-orange-400 text-slate-300 border border-white/10 px-3 py-2 rounded-xl text-xs font-bold transition-all">
-                        <Copy size={16} /> Msg
-                      </button>
-                    </div>
-                    
+                    <button onClick={() => setLeadSelecionado(lead)} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2">
+                      Ver Ficha
+                    </button>
                   </div>
                 ))}
               </div>
@@ -277,6 +223,109 @@ export default function Home() {
           ))}
         </div>
       </main>
+
+      {/* MODAL FLUTUANTE (OVERLAY) */}
+      {leadSelecionado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setLeadSelecionado(null)}></div>
+          
+          <div className="relative bg-[#0A0A0A] border border-white/10 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className="flex items-start justify-between p-6 border-b border-white/10 bg-[#121212]">
+              <div className="pr-10">
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-2xl font-black text-white">{leadSelecionado.nome}</h2>
+                  <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold">{leadSelecionado.score} pts</span>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm text-slate-400">
+                  <span className="flex items-center gap-1"><MapPin size={16} className="text-slate-500"/> {leadSelecionado.endereco}</span>
+                  <span className="flex items-center gap-1"><Phone size={16} className="text-slate-500"/> {leadSelecionado.telefone || "Sem telefone"}</span>
+                  {leadSelecionado.nota && <span className="flex items-center gap-1"><Star size={16} className="text-amber-400"/> {leadSelecionado.nota} ({leadSelecionado.avaliacoes} avaliações)</span>}
+                </div>
+              </div>
+              <button onClick={() => setLeadSelecionado(null)} className="p-2 bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-full transition-colors absolute top-6 right-6">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+              <div className="flex flex-wrap gap-4">
+                {leadSelecionado.wa_link && (
+                  <a href={leadSelecionado.wa_link} target="_blank" className="flex items-center gap-2 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white border border-[#25D366]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                    <MessageCircle size={18} /> Abrir no WhatsApp
+                  </a>
+                )}
+                {leadSelecionado.site && (
+                  <a href={leadSelecionado.site} target="_blank" className="flex items-center gap-2 bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                    <Globe size={18} /> Acessar Site
+                  </a>
+                )}
+                <a href={leadSelecionado.maps} target="_blank" className="flex items-center gap-2 bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                  <MapPin size={18} /> Google Maps
+                </a>
+              </div>
+
+              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
+                <AlertCircle size={20} className="text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-red-400 font-bold text-sm mb-1">Diagnóstico da IA</h4>
+                  <p className="text-red-300/80 text-sm leading-relaxed">{leadSelecionado.diagnostico}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-6">
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-white flex items-center gap-2"><MessageCircle size={18} className="text-green-500"/> Abordagem WhatsApp</h4>
+                      <button onClick={() => copiarTexto(leadSelecionado.mensagens?.whatsapp)} className="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 px-2 py-1 rounded-lg">
+                        <Copy size={14}/> Copiar
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{leadSelecionado.mensagens?.whatsapp || "Nenhuma mensagem gerada."}</p>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-white flex items-center gap-2"><Send size={18} className="text-pink-500"/> Abordagem Instagram</h4>
+                      <button onClick={() => copiarTexto(leadSelecionado.mensagens?.instagram)} className="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 px-2 py-1 rounded-lg">
+                        <Copy size={14}/> Copiar
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{leadSelecionado.mensagens?.instagram || "Nenhuma mensagem gerada."}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-white flex items-center gap-2"><Mail size={18} className="text-blue-400"/> Proposta por E-mail</h4>
+                      <button onClick={() => copiarTexto(leadSelecionado.mensagens?.email_corpo)} className="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 px-2 py-1 rounded-lg">
+                        <Copy size={14}/> Copiar Corpo
+                      </button>
+                    </div>
+                    <div className="mb-3 pb-3 border-b border-white/10">
+                      <span className="text-xs text-slate-500 font-bold block mb-1">Assunto</span>
+                      <p className="text-sm text-white font-semibold">{leadSelecionado.mensagens?.email_assunto || "-"}</p>
+                    </div>
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{leadSelecionado.mensagens?.email_corpo || "Nenhuma mensagem gerada."}</p>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-white flex items-center gap-2"><MessageCircle size={18} className="text-slate-400"/> Follow-up (3-5 dias)</h4>
+                      <button onClick={() => copiarTexto(leadSelecionado.mensagens?.followup)} className="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 px-2 py-1 rounded-lg">
+                        <Copy size={14}/> Copiar
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{leadSelecionado.mensagens?.followup || "Nenhuma mensagem gerada."}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,17 +1,17 @@
+import os
+import json
+from datetime import date
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import json
-import os
-from pathlib import Path
+from supabase import create_client, Client
 from google import genai
 
 # Importa a inteligência do seu script original
-from prospector import buscar_places, qualificar, gerar_mensagens
+from prospector import buscar_places, qualificar, gerar_mensagens, wa_link
 
 app = FastAPI(title="ProspectAI API")
 
-# Permite comunicação com o Next.js
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +20,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATA_FILE = Path("leads.json")
+# Conectar ao Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("Credenciais do Supabase não encontradas no .env")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 class BuscaRequest(BaseModel):
     nicho: str
@@ -30,61 +37,64 @@ class BuscaRequest(BaseModel):
 
 @app.get("/api/leads")
 def listar_leads():
-    if not DATA_FILE.exists():
-        return []
-    return json.loads(DATA_FILE.read_text("utf-8"))
-
-@app.post("/api/prospectar")
-def iniciar_prospeccao(req: BuscaRequest):
     try:
-        # 1. Carrega os leads atuais para não duplicar
-        base = {l["id"]: l for l in json.loads(DATA_FILE.read_text("utf-8"))} if DATA_FILE.exists() else {}
-        
-        # 2. Faz a busca no Google Maps
-        lugares = buscar_places(req.nicho, req.cidade, req.maximo)
-        
-        novos = []
-        for p in lugares:
-            if p["id"] in base:
-                continue
-            l = qualificar(p, False) # False para não usar pagespeed (mais rápido na web)
-            l.update({"nicho": req.nicho, "cidade": req.cidade, "status": "novo"})
-            novos.append(l)
-            
-        novos.sort(key=lambda x: x["score"], reverse=True)
-        
-        # 3. Liga a IA (Gemini)
-        GEMINI_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-        cliente = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
-        
-        for i, l in enumerate(novos[:req.top]):
-            l["mensagens"] = gerar_mensagens(l, req.nicho, cliente)
-            
-        for l in novos[req.top:]:
-            l["mensagens"] = {}
-            
-        # 4. Guarda tudo no JSON
-        for l in novos:
-            base[l["id"]] = l
-            
-        todos = sorted(base.values(), key=lambda x: x["score"], reverse=True)
-        DATA_FILE.write_text(json.dumps(todos, ensure_ascii=False, indent=1), "utf-8")
-        
-        return {"status": "sucesso", "novos": len(novos), "total": len(todos)}
+        response = supabase.table("leads").select("*").order("score", desc=True).execute()
+        return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/leads/{lead_id}/status")
 def atualizar_status(lead_id: str, status: str):
-    """Guarda a nova coluna quando arrasta um card"""
-    if not DATA_FILE.exists():
-        return {"erro": "Sem dados"}
-    
-    leads = json.loads(DATA_FILE.read_text("utf-8"))
-    for l in leads:
-        if l["id"] == lead_id:
-            l["status"] = status
-            break
+    try:
+        supabase.table("leads").update({"status": status}).eq("id", lead_id).execute()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/prospectar")
+def iniciar_prospeccao(req: BuscaRequest):
+    try:
+        # 1. Busca no Maps
+        lugares = buscar_places(req.nicho, req.cidade, req.maximo)
+        
+        # 2. Puxa apenas os IDs que já existem no Supabase para não duplicar
+        existentes_res = supabase.table("leads").select("id").execute()
+        ids_existentes = {item["id"] for item in existentes_res.data}
+        
+        novos = []
+        for p in lugares:
+            if p["id"] in ids_existentes:
+                continue
+            l = qualificar(p, False)
+            l.update({
+                "nicho": req.nicho, 
+                "cidade": req.cidade, 
+                "status": "novo",
+                "data": str(date.today())
+            })
+            novos.append(l)
             
-    DATA_FILE.write_text(json.dumps(leads, ensure_ascii=False, indent=1), "utf-8")
-    return {"status": "ok"}
+        novos.sort(key=lambda x: x["score"], reverse=True)
+        
+        # 3. Chama o Gemini para gerar as mensagens
+        GEMINI_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+        cliente = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+        
+        for i, l in enumerate(novos):
+            if i < req.top:
+                l["mensagens"] = gerar_mensagens(l, req.nicho, cliente)
+            else:
+                l["mensagens"] = {}
+                
+            # Gera o link do WhatsApp para gravar no Supabase
+            msg_wpp = l.get("mensagens", {}).get("whatsapp", "")
+            l["wa_link"] = wa_link(l, msg_wpp)
+            
+        # 4. Grava os novos leads no Supabase
+        if novos:
+            supabase.table("leads").upsert(novos).execute()
+            
+        return {"status": "sucesso", "novos": len(novos)}
+    except Exception as e:
+        print("Erro interno da API:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
