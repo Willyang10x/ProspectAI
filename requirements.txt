@@ -1,6 +1,8 @@
-requests
-python-dotenv
-google-genai
-openpyxl
 fastapi
 uvicorn
+pydantic
+supabase
+google-genai
+requests
+python-dotenv
+openpyxl
