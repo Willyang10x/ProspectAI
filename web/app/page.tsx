@@ -19,7 +19,7 @@ type Lead = {
   telefone: string;
   whatsapp: string;
   site: string;
-  email?: string; // NOVO CAMPO
+  email?: string;
   nota: number;
   avaliacoes: number;
   diagnostico: string;
@@ -73,10 +73,9 @@ export default function Home() {
     else document.body.style.overflow = 'auto';
   }, [leadSelecionado]);
 
-  // Função centralizada para abrir o Modal e Auto-Preencher o E-mail
   const abrirFichaCompleta = (lead: Lead) => {
     setLeadSelecionado(lead);
-    setEmailDestino(lead.email || ""); // Auto-preenche se o robô encontrou o e-mail!
+    setEmailDestino(lead.email || "");
   };
 
   const fazerLogin = async (e: React.FormEvent) => {
@@ -106,7 +105,7 @@ export default function Home() {
   const carregarLeads = async () => {
     setLoadingDados(true);
     try {
-      const res = await axios.get("https://prospectai-api-l98h.onrender.com/api/leads//api/leads");
+      const res = await axios.get("https://prospectai-api-l98h.onrender.com/api/leads");
       setLeads(res.data);
       setErroServidor(false);
     } catch (error) { setErroServidor(true); } 
@@ -115,7 +114,7 @@ export default function Home() {
 
   const mudarStatus = async (id: string, novoStatus: string) => {
     setLeads(leads.map(l => l.id === id ? { ...l, status: novoStatus } : l));
-    try { await axios.put(`https://prospectai-api-l98h.onrender.com/api/leads//api/leads/${id}/status?status=${novoStatus}`); } 
+    try { await axios.put(`https://prospectai-api-l98h.onrender.com/api/leads/${id}/status?status=${novoStatus}`); } 
     catch (error) { console.error("Erro ao guardar status", error); }
   };
 
@@ -132,7 +131,7 @@ export default function Home() {
     if (!nicho || !cidade) return alert("Preencha o nicho e a cidade!");
     setBuscando(true);
     try {
-      await axios.post("https://prospectai-api-l98h.onrender.com/api/leads//api/prospectar", { nicho, cidade, maximo: 10, top: 10 });
+      await axios.post("https://prospectai-api-l98h.onrender.com/api/prospectar", { nicho, cidade, maximo: 10, top: 10 });
       await carregarLeads();
       setNicho(""); setCidade("");
     } catch (error) { alert("Erro ao buscar. Verifique o terminal do Python."); } 
@@ -143,7 +142,7 @@ export default function Home() {
     if (!emailDestino.includes("@")) return alert("Por favor, digite um e-mail válido!");
     setEnviandoEmail(true);
     try {
-      await axios.post("https://prospectai-api-l98h.onrender.com/api/leads//api/enviar-email", {
+      await axios.post("https://prospectai-api-l98h.onrender.com/api/enviar-email", {
         para: emailDestino,
         assunto: leadSelecionado?.mensagens?.email_assunto,
         corpo: leadSelecionado?.mensagens?.email_corpo
