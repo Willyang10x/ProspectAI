@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "ProspectAI",
   description: "Prospecção de clientes",
   icons: {
-    icon: "./logo-prospectai.png",
+    icon: "/Flavicon-prospectAI.png",
   },
 };
 
