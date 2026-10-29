@@ -43,9 +43,14 @@ export default function Home() {
   const [loadingDados, setLoadingDados] = useState(false);
   const [erroServidor, setErroServidor] = useState(false);
   
+  // Estados da Prospecção
   const [nicho, setNicho] = useState("");
+  const [cep, setCep] = useState("");
   const [cidade, setCidade] = useState("");
   const [buscando, setBuscando] = useState(false);
+  
+  // Estado para Pesquisar leads na tela
+  const [filtroLead, setFiltroLead] = useState("");
   
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [emailDestino, setEmailDestino] = useState("");
@@ -72,6 +77,23 @@ export default function Home() {
     if (leadSelecionado) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'auto';
   }, [leadSelecionado]);
+
+  // Busca Cidade pelo CEP
+  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value.replace(/\D/g, '');
+    setCep(valor);
+    
+    if (valor.length === 8) {
+      try {
+        const res = await axios.get(`https://viacep.com.br/ws/${valor}/json/`);
+        if (res.data && !res.data.erro) {
+          setCidade(`${res.data.localidade} - ${res.data.uf}`);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar CEP", error);
+      }
+    }
+  };
 
   const abrirFichaCompleta = (lead: Lead) => {
     setLeadSelecionado(lead);
@@ -128,12 +150,12 @@ export default function Home() {
 
   const iniciarProspeccao = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nicho || !cidade) return alert("Preencha o nicho e a cidade!");
+    if (!nicho || !cidade) return alert("Selecione o nicho e informe o CEP/Cidade!");
     setBuscando(true);
     try {
       await axios.post("https://prospectai-api-l98h.onrender.com/api/prospectar", { nicho, cidade, maximo: 10, top: 10 });
       await carregarLeads();
-      setNicho(""); setCidade("");
+      setNicho(""); setCidade(""); setCep("");
     } catch (error) { alert("Erro ao buscar. Verifique o terminal do Python."); } 
     finally { setBuscando(false); }
   };
@@ -156,6 +178,9 @@ export default function Home() {
     if (texto) { navigator.clipboard.writeText(texto); alert("Copiado com sucesso!"); }
   };
 
+  // Filtragem local
+  const leadsExibidos = leads.filter(l => l.nome.toLowerCase().includes(filtroLead.toLowerCase()));
+
   if (loadingAuth) return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
       <div className="w-12 h-12 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
@@ -164,14 +189,21 @@ export default function Home() {
   );
 
   if (!session) return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6 selection:bg-orange-500/30">
-      <div className="w-full max-w-md bg-[#121212] border border-white/10 rounded-3xl shadow-2xl p-8 relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-orange-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6 selection:bg-orange-500/30 relative overflow-hidden">
+      {/* CÓDIGO DA ANIMAÇÃO DA ONDA (CSS + DIVs) */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes wave-slow { 0% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0, 0) scale(1); } }
+        .animate-wave-slow { animation: wave-slow 15s infinite ease-in-out; }
+        .animate-wave-fast { animation: wave-slow 10s infinite ease-in-out reverse; }
+      `}} />
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-orange-600/20 blur-[120px] rounded-full animate-wave-slow"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-amber-500/10 blur-[100px] rounded-full animate-wave-fast"></div>
+      </div>
+
+      <div className="w-full max-w-md bg-[#121212]/90 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10">
         <div className="flex flex-col items-center mb-8 relative z-10">
-          <div className="relative group mb-4">
-            <div className="absolute -inset-2 bg-gradient-to-r from-orange-600 to-amber-500 rounded-full blur-lg opacity-40"></div>
-            <img src="/logo-prospectAI.svg" alt="Logo" className="relative h-20 w-auto drop-shadow-2xl" />
-          </div>
+          <img src="/logo-prospectAI.png" alt="Logo" className="relative h-20 w-auto drop-shadow-2xl mb-4" />
           <h1 className="text-2xl font-black text-white">Bem-vindo ao <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-400">ProspectAI</span></h1>
           <p className="text-slate-400 text-sm mt-1">Faça login para aceder ao seu CRM.</p>
         </div>
@@ -218,41 +250,102 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans selection:bg-orange-500/30 overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans selection:bg-orange-500/30 overflow-hidden flex flex-col relative">
+      
+      {/* CÓDIGO DA ANIMAÇÃO DA ONDA GLOBAL */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes wave-slow { 0% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0, 0) scale(1); } }
+        .animate-wave-slow { animation: wave-slow 15s infinite ease-in-out; }
+        .animate-wave-fast { animation: wave-slow 10s infinite ease-in-out reverse; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}} />
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-orange-600/10 blur-[150px] rounded-full animate-wave-slow"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-amber-500/10 blur-[120px] rounded-full animate-wave-fast"></div>
+      </div>
+
       <header className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between shadow-2xl shadow-black">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-6 relative z-10">
           <div className="relative group cursor-pointer flex items-center justify-center">
             <div className="absolute -inset-2 bg-gradient-to-r from-orange-600 to-amber-500 rounded-full blur-xl opacity-20 group-hover:opacity-50 transition duration-700"></div>
-            <img src="/logo-prospectAI.svg" alt="ProspectAI Logo" className="relative h-14 w-auto drop-shadow-2xl transition-transform duration-500 group-hover:scale-105" />
+            <img src="/logo-prospectAI.png" alt="ProspectAI Logo" className="relative h-14 w-auto drop-shadow-2xl transition-transform duration-500 group-hover:scale-105" />
           </div>
-          <div className="flex flex-col hidden lg:flex">
+          <div className="flex flex-col hidden xl:flex">
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-1">Prospect<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-400">AI</span></h1>
             <p className="text-[11px] text-slate-400 font-bold tracking-[0.2em] uppercase mt-0.5 flex items-center gap-1"><Target size={12} className="text-orange-500"/> Painel de Captação</p>
           </div>
         </div>
         
-        <form onSubmit={iniciarProspeccao} className="flex items-center gap-2 bg-[#121212] p-1.5 rounded-2xl border border-white/10 shadow-inner">
-          <input type="text" placeholder="Nicho (ex: Clínicas)" value={nicho} onChange={e => setNicho(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-32 md:w-40 focus:ring-0 disabled:opacity-50"/>
+        {/* BARRA DE PROSPECÇÃO AVANÇADA */}
+        <form onSubmit={iniciarProspeccao} className="relative z-10 flex items-center gap-2 bg-[#121212] p-1.5 rounded-2xl border border-white/10 shadow-inner hidden md:flex">
+          <select value={nicho} onChange={e => setNicho(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white px-4 py-2 w-40 focus:ring-0 disabled:opacity-50 cursor-pointer appearance-none hide-scrollbar">
+            <option value="" className="bg-[#121212]">Nicho...</option>
+            <option value="Advogados" className="bg-[#121212]">Advogados</option>
+            <option value="Clínicas Médicas" className="bg-[#121212]">Clínicas Médicas</option>
+            <option value="Odontologia" className="bg-[#121212]">Odontologia</option>
+            <option value="Estética e Beleza" className="bg-[#121212]">Estética e Beleza</option>
+            <option value="Imobiliárias" className="bg-[#121212]">Imobiliárias</option>
+            <option value="Arquitetura" className="bg-[#121212]">Arquitetura</option>
+            <option value="Academias" className="bg-[#121212]">Academias</option>
+            <option value="Restaurantes" className="bg-[#121212]">Restaurantes</option>
+          </select>
+          
           <div className="w-px h-6 bg-white/10"></div>
-          <input type="text" placeholder="Cidade (ex: SP)" value={cidade} onChange={e => setCidade(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-32 md:w-40 focus:ring-0 disabled:opacity-50"/>
-          <button type="submit" disabled={buscando} className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold py-2 px-4 md:px-5 rounded-xl text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20">
-            {buscando ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div><span className="hidden md:inline">Buscando...</span></> : <><Search size={16} /><span className="hidden md:inline">Prospectar</span></>}
+          
+          <input type="text" placeholder="CEP" value={cep} onChange={handleCepChange} maxLength={8} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-24 focus:ring-0 disabled:opacity-50 text-center"/>
+          
+          <div className="w-px h-6 bg-white/10"></div>
+          
+          <input type="text" placeholder="Cidade (Auto)" value={cidade} onChange={e => setCidade(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-orange-400 placeholder-slate-500 px-4 py-2 w-40 focus:ring-0 disabled:opacity-50 font-medium"/>
+          
+          <button type="submit" disabled={buscando} className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold py-2 px-5 rounded-xl text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20">
+            {buscando ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div><span>Buscando...</span></> : <><Search size={16} /><span>Prospectar</span></>}
           </button>
         </form>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4 relative z-10">
+          {/* BARRA DE PESQUISA DE LEADS (NOVIDADE) */}
+          <div className="relative hidden lg:block">
+            <Search size={16} className="absolute left-3 top-2.5 text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="Pesquisar lead..." 
+              value={filtroLead} 
+              onChange={e => setFiltroLead(e.target.value)}
+              className="bg-black/50 border border-white/10 text-sm text-white rounded-full py-2 pl-9 pr-4 focus:outline-none focus:border-orange-500 w-48 transition-all"
+            />
+          </div>
+
           <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-5 py-2.5 rounded-full shadow-inner">
             <LayoutDashboard size={18} className="text-orange-400" />
-            <span className="text-sm font-semibold tracking-wide text-white"><span className="text-orange-400 font-bold">{leads.length}</span><span className="hidden md:inline"> leads</span></span>
+            <span className="text-sm font-semibold tracking-wide text-white"><span className="text-orange-400 font-bold">{leadsExibidos.length}</span><span className="hidden md:inline"> leads</span></span>
           </div>
           <button onClick={fazerLogout} title="Sair do Sistema" className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-full transition-colors"><LogOut size={18} /></button>
         </div>
       </header>
 
+      {/* Barra mobile para prospecção */}
+      <div className="md:hidden px-4 py-3 bg-[#0A0A0A]/50 border-b border-white/5 relative z-10">
+         <form onSubmit={iniciarProspeccao} className="flex flex-col gap-2">
+            <select value={nicho} onChange={e => setNicho(e.target.value)} className="bg-[#121212] border border-white/5 text-white rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500">
+               <option value="">Selecione a Profissão...</option>
+               <option value="Advogados">Advogados</option>
+               <option value="Clínicas Médicas">Clínicas Médicas</option>
+               <option value="Odontologia">Odontologia</option>
+            </select>
+            <div className="flex gap-2">
+              <input type="text" placeholder="CEP" value={cep} onChange={handleCepChange} maxLength={8} className="bg-[#121212] border border-white/5 text-white rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500 w-1/3 text-center"/>
+              <input type="text" placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} className="bg-[#121212] border border-white/5 text-orange-400 rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500 w-2/3 font-medium"/>
+            </div>
+            <button type="submit" disabled={buscando} className="bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold p-3 rounded-lg flex justify-center items-center mt-1">Buscar Leads</button>
+         </form>
+      </div>
+
       {loadingDados && leads.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center"><div className="w-10 h-10 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div></div>
+        <div className="flex-1 flex items-center justify-center relative z-10"><div className="w-10 h-10 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div></div>
       ) : (
-        <main className="p-6 flex-1 overflow-hidden flex flex-col w-full">
+        <main className="p-6 flex-1 overflow-hidden flex flex-col w-full relative z-10">
           <div className="flex gap-4 overflow-x-auto pb-4 h-full w-full scrollbar-thin scrollbar-thumb-orange-500/20 scrollbar-track-transparent">
             {COLUNAS.map((coluna) => (
               <div key={coluna} onDragOver={onDragOver} onDrop={(e) => onDrop(e, coluna)} className="flex-1 min-w-[260px] flex flex-col gap-4 h-full">
@@ -262,11 +355,11 @@ export default function Home() {
                     {coluna}
                   </h2>
                   <span className="bg-black/60 border border-white/10 text-orange-400 px-2.5 py-0.5 rounded-full text-xs font-black shadow-inner">
-                    {leads.filter((l) => (l.status || "novo") === coluna).length}
+                    {leadsExibidos.filter((l) => (l.status || "novo") === coluna).length}
                   </span>
                 </div>
                 <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1 pb-10 scrollbar-none">
-                  {leads.filter((l) => (l.status || "novo") === coluna).map((lead) => (
+                  {leadsExibidos.filter((l) => (l.status || "novo") === coluna).map((lead) => (
                     <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} className="group relative bg-[#121212] border border-white/5 hover:border-orange-500/40 p-4 rounded-xl shadow-xl transition-all duration-300 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-orange-500/10">
                       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                       <div className="flex justify-between items-start mb-2 gap-2">
