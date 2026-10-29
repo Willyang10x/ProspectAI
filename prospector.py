@@ -19,16 +19,12 @@ load_dotenv()
 GOOGLE_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-# Esconde a chave do Maps temporariamente para o SDK do Gemini não se confundir
 if "GOOGLE_API_KEY" in os.environ:
     del os.environ["GOOGLE_API_KEY"]
 
-SEU_NOME = os.getenv("SEU_NOME", "Seu Nome")
-SUA_OFERTA = os.getenv(
-    "SUA_OFERTA",
-    "criação de sites profissionais para pequenos negócios, rápidos no celular e com botão de WhatsApp"
-)
-SEU_PORTFOLIO = os.getenv("SEU_PORTFOLIO", "")
+SEU_NOME = "Willyan Gabriel"
+SUA_OFERTA = "criação de sites e landing pages profissionais, focados em conversão e rápidos no celular"
+SEU_PORTFOLIO = "https://dev-willyan.netlify.app/"
 
 DATA_FILE = Path("leads.json")
 REDES_SOCIAIS = ("instagram.com", "facebook.com", "linktr.ee", "wa.me", "whatsapp.com",
@@ -137,7 +133,10 @@ def qualificar(p: dict, usar_pagespeed: bool) -> dict:
     }
 
 SYSTEM_PROMPT = f"""Você é {SEU_NOME}, desenvolvedor(a) que oferece {SUA_OFERTA}. Escreva abordagens comerciais frias em português do Brasil para um negócio local. 
-Regras:
+Regras OBRIGATÓRIAS:
+- Apresente-se SEMPRE como {SEU_NOME}.
+- Inclua o seu portfólio de forma natural nas mensagens: {SEU_PORTFOLIO}.
+- NÃO use asteriscos (**) ou formatação markdown no texto.
 - Use SOMENTE os dados fornecidos; nunca invente fatos sobre o negócio.
 - Cite 1 detalhe real (nota, avaliações, ausência de site, etc.) de forma elogiosa e natural.
 - Tom humano, respeitoso e direto, sem parecer spam. Sem exageros, sem emoji em excesso (no máximo 1).
@@ -146,19 +145,19 @@ Regras:
 - Instagram DM: até 350 caracteres.
 - E-mail: assunto curto + corpo de 90-130 palavras.
 - followup: mensagem de WhatsApp de 3 a 5 dias depois, curta e leve.
-{('- Se couber, mencione o portfólio: ' + SEU_PORTFOLIO) if SEU_PORTFOLIO else ''}
 
 Responda APENAS com JSON válido, com as seguintes chaves exatas: "whatsapp", "instagram", "email_assunto", "email_corpo", "followup" """
 
 def mensagem_fallback(l: dict) -> dict:
     nome = l["nome"]
-    gancho = ("Vi que o(a) {n} tem {a} avaliações no Google" if l["avaliacoes"] >= 10
-              else "Encontrei o(a) {n} pesquisando no Google").format(n=nome, a=l["avaliacoes"])
+    gancho = (f"Vi que o(a) {nome} tem {l['avaliacoes']} avaliações no Google" if l["avaliacoes"] >= 10
+              else f"Encontrei o(a) {nome} pesquisando no Google")
     dor = ("mas não achei um site próprio" if not l["site"] or
            any(d in l["site"].lower() for d in REDES_SOCIAIS)
            else "e dei uma olhada no site de vocês, vejo espaço para melhorar")
            
-    zap = (f"Olá! Aqui é {SEU_NOME}. {gancho}, {dor}. Trabalho com {SUA_OFERTA}. "
+    zap = (f"Olá! Aqui é o {SEU_NOME}. {gancho}, {dor}. Trabalho com {SUA_OFERTA}. "
+           f"Você pode ver um pouco do meu trabalho em {SEU_PORTFOLIO}. "
            "Posso te mostrar uma ideia rápida, sem compromisso? "
            "Se não fizer sentido, é só avisar que não incomodo mais.")
            
@@ -167,7 +166,7 @@ def mensagem_fallback(l: dict) -> dict:
         "instagram": zap[:350],
         "email_assunto": f"Uma ideia para a presença online do(a) {nome}",
         "email_corpo": f"Olá, tudo bem?\n\n{gancho}, {dor}.\n\nTrabalho com {SUA_OFERTA} e "
-                       f"gostaria de mostrar uma proposta enxuta.\n\nPosso enviar? "
+                       f"gostaria de mostrar uma proposta enxuta.\n\nMeu portfólio: {SEU_PORTFOLIO}\n\nPosso enviar? "
                        f"Se não for o momento, é só me avisar.\n\nAbraço,\n{SEU_NOME}",
         "followup": f"Oi! Só retomando minha mensagem sobre o site do(a) {nome}. "
                     "Faz sentido eu te mandar uma ideia? Se não, sem problemas!",
