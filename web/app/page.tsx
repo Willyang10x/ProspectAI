@@ -25,7 +25,7 @@ type Lead = {
   diagnostico: string;
   score: number;
   status?: string;
-  mensagens?: { whatsapp?: string; instagram?: string; email_assunto?: string; email_corpo?: string; followup?: string; };
+  mensagens?: { whatsapp?: string; instagram?: string; instagram_url?: string; email_assunto?: string; email_corpo?: string; followup?: string; };
   wa_link?: string;
   maps?: string;
 };
@@ -43,15 +43,12 @@ export default function Home() {
   const [loadingDados, setLoadingDados] = useState(false);
   const [erroServidor, setErroServidor] = useState(false);
   
-  // Estados da Prospecção
   const [nicho, setNicho] = useState("");
   const [cep, setCep] = useState("");
   const [cidade, setCidade] = useState("");
   const [buscando, setBuscando] = useState(false);
   
-  // Estado para Pesquisar leads na tela
   const [filtroLead, setFiltroLead] = useState("");
-  
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [emailDestino, setEmailDestino] = useState("");
   const [enviandoEmail, setEnviandoEmail] = useState(false);
@@ -78,20 +75,16 @@ export default function Home() {
     else document.body.style.overflow = 'auto';
   }, [leadSelecionado]);
 
-  // Busca Cidade pelo CEP
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value.replace(/\D/g, '');
     setCep(valor);
-    
     if (valor.length === 8) {
       try {
         const res = await axios.get(`https://viacep.com.br/ws/${valor}/json/`);
         if (res.data && !res.data.erro) {
           setCidade(`${res.data.localidade} - ${res.data.uf}`);
         }
-      } catch (error) {
-        console.error("Erro ao buscar CEP", error);
-      }
+      } catch (error) { console.error("Erro ao buscar CEP", error); }
     }
   };
 
@@ -112,10 +105,7 @@ export default function Home() {
   const loginComGoogle = async () => {
     setErroAuth("");
     setLoadingAuth(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin }
-    });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin }});
     if (error) { setErroAuth("Erro ao conectar com o Google."); setLoadingAuth(false); }
   };
 
@@ -165,24 +155,18 @@ export default function Home() {
     setEnviandoEmail(true);
     try {
       await axios.post("https://prospectai-api-l98h.onrender.com/api/enviar-email", {
-        para: emailDestino,
-        assunto: leadSelecionado?.mensagens?.email_assunto,
-        corpo: leadSelecionado?.mensagens?.email_corpo
+        para: emailDestino, assunto: leadSelecionado?.mensagens?.email_assunto, corpo: leadSelecionado?.mensagens?.email_corpo
       });
       alert("E-mail enviado com sucesso!");
     } catch (error) { alert("Erro ao enviar e-mail. Verifique o terminal do Python."); } 
     finally { setEnviandoEmail(false); }
   };
 
-  // Excluir Lead Diretamente via Supabase Frontend
   const excluirLead = async (id: string) => {
     const confirmacao = window.confirm("Tem a certeza que deseja excluir este lead permanentemente?");
     if (!confirmacao) return;
-
-    // Remove da tela imediatamente (Optimistic UI)
     setLeads(leads.filter(l => l.id !== id));
     if (leadSelecionado?.id === id) setLeadSelecionado(null);
-
     try {
       const { error } = await supabase.from("leads").delete().eq("id", id);
       if (error) throw error;
@@ -193,11 +177,28 @@ export default function Home() {
     }
   };
 
+  const abrirInstagram = (lead: Lead) => {
+    const texto = lead.mensagens?.instagram;
+    if (texto) {
+      navigator.clipboard.writeText(texto);
+      alert("Abordagem copiada! O Instagram vai abrir agora. Basta colar a mensagem no chat.");
+    }
+    
+    let url = lead.mensagens?.instagram_url;
+    if (!url || url === "") {
+      if (lead.site && lead.site.includes("instagram.com")) {
+        url = lead.site;
+      } else {
+        url = `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(lead.nome)}`;
+      }
+    }
+    window.open(url, '_blank');
+  };
+
   const copiarTexto = (texto: string | undefined) => {
     if (texto) { navigator.clipboard.writeText(texto); alert("Copiado com sucesso!"); }
   };
 
-  // Filtragem local
   const leadsExibidos = leads.filter(l => l.nome.toLowerCase().includes(filtroLead.toLowerCase()));
 
   if (loadingAuth) return (
@@ -359,43 +360,41 @@ export default function Home() {
           <div className="flex gap-4 overflow-x-auto pb-4 h-full w-full scrollbar-thin scrollbar-thumb-orange-500/20 scrollbar-track-transparent">
             {COLUNAS.map((coluna) => (
               <div key={coluna} onDragOver={onDragOver} onDrop={(e) => onDrop(e, coluna)} className="flex-1 min-w-[260px] flex flex-col gap-4 h-full">
-                <div className="flex items-center justify-between bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md shadow-lg shrink-0">
-                  <h2 className="font-extrabold text-slate-200 uppercase tracking-widest text-xs flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full shadow-lg ${coluna === 'novo' ? 'bg-orange-500' : coluna === 'fechado' ? 'bg-emerald-500' : coluna === 'reunião' ? 'bg-amber-400' : 'bg-slate-500'}`}></div>
+                
+                <div className="flex items-center justify-between bg-[#121212] border border-white/5 rounded-2xl p-3 shrink-0">
+                  <h2 className="font-extrabold text-slate-200 uppercase tracking-widest text-[11px] flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${coluna === 'novo' ? 'bg-orange-500' : coluna === 'fechado' ? 'bg-emerald-500' : coluna === 'reunião' ? 'bg-amber-400' : 'bg-slate-500'}`}></div>
                     {coluna}
                   </h2>
-                  <span className="bg-black/60 border border-white/10 text-orange-400 px-2.5 py-0.5 rounded-full text-xs font-black shadow-inner">
+                  <span className="bg-black text-orange-500 px-2.5 py-0.5 rounded-lg text-xs font-black">
                     {leadsExibidos.filter((l) => (l.status || "novo") === coluna).length}
                   </span>
                 </div>
+                
                 <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1 pb-10 scrollbar-none">
                   {leadsExibidos.filter((l) => (l.status || "novo") === coluna).map((lead) => (
                     
-                    <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} className="group relative bg-[#121212] border border-white/5 hover:border-orange-500/40 p-4 rounded-xl shadow-xl transition-all duration-300 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-orange-500/10">
-                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      
-                      <div className="flex justify-between items-start mb-2 gap-2">
-                        <div className="flex items-start gap-1.5 flex-1 min-w-0">
-                          <GripVertical size={18} className="text-slate-600 mt-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                          <h3 onClick={() => abrirFichaCompleta(lead)} className="font-bold text-white text-base leading-snug hover:text-orange-400 transition-colors cursor-pointer group/title break-words">
-                            {lead.nome} 
-                            <Maximize2 size={14} className="inline ml-2 text-slate-500 group-hover/title:text-orange-400 opacity-0 group-hover/title:opacity-100 transition-opacity" />
-                          </h3>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button onClick={(e) => { e.stopPropagation(); excluirLead(lead.id); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-1" title="Excluir Lead">
+                    <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} className="group relative bg-[#121212] border border-white/5 hover:border-white/10 p-4 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing">
+                      <div className="flex justify-between items-start mb-3 gap-2">
+                        <h3 onClick={() => abrirFichaCompleta(lead)} className="font-bold text-white text-[15px] leading-snug hover:text-orange-400 transition-colors cursor-pointer">
+                          {lead.nome}
+                        </h3>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={(e) => { e.stopPropagation(); excluirLead(lead.id); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity p-1" title="Excluir Lead">
                             <Trash2 size={14}/>
                           </button>
-                          <span className="bg-gradient-to-br from-orange-500 to-red-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black shadow-lg border border-orange-400/20">{lead.score}</span>
+                          <span className="bg-[#FF4500] text-white px-2 py-0.5 rounded text-[11px] font-black">{lead.score}</span>
                         </div>
                       </div>
-
-                      <div className="text-xs text-slate-400 space-y-1.5 mb-3 bg-white/[0.02] p-2.5 rounded-lg border border-white/5 pointer-events-none mt-3">
-                        {lead.nota && <p className="flex items-center gap-1.5"><Star size={14} className="text-amber-400" /> <span className="text-white font-bold">{lead.nota}</span> ({lead.avaliacoes} avs)</p>}
+                      
+                      <div className="text-[13px] text-slate-400 space-y-1.5 mb-4 pointer-events-none">
+                        {lead.nota && <p className="flex items-center gap-1.5"><Star size={14} className="text-amber-400" /> <span className="text-slate-200 font-bold">{lead.nota}</span> <span className="text-slate-500">({lead.avaliacoes} avs)</span></p>}
                         <p className="flex items-start gap-1.5"><AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{lead.diagnostico}</span></p>
                       </div>
-                      <button onClick={() => abrirFichaCompleta(lead)} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2">Ver Ficha</button>
+                      
+                      <button onClick={() => abrirFichaCompleta(lead)} className="w-full bg-[#1A1A1A] hover:bg-[#252525] border border-white/5 text-slate-300 py-2 rounded-lg text-sm font-semibold transition-colors">
+                        Ver Ficha
+                      </button>
                     </div>
 
                   ))}
@@ -438,6 +437,12 @@ export default function Home() {
                 {leadSelecionado.wa_link && (
                   <a href={leadSelecionado.wa_link} target="_blank" className="flex items-center gap-2 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white border border-[#25D366]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all"><MessageCircle size={18} /> Abrir no WhatsApp</a>
                 )}
+                
+                {/* BOTÃO INSTAGRAM COM ÍCONE SVG NATIVO (Sem dependências do Lucide) */}
+                <button onClick={() => abrirInstagram(leadSelecionado)} className="flex items-center gap-2 bg-[#E1306C]/10 text-[#E1306C] hover:bg-[#E1306C] hover:text-white border border-[#E1306C]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg> Abordar no Instagram
+                </button>
+
                 {leadSelecionado.site && (
                   <a href={leadSelecionado.site} target="_blank" className="flex items-center gap-2 bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-all"><Globe size={18} /> Acessar Site</a>
                 )}

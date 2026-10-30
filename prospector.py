@@ -132,21 +132,19 @@ def qualificar(p: dict, usar_pagespeed: bool) -> dict:
         "mensagens": {},
     }
 
-SYSTEM_PROMPT = f"""Você é {SEU_NOME}, desenvolvedor(a) que oferece {SUA_OFERTA}. Escreva abordagens comerciais frias em português do Brasil para um negócio local. 
-Regras OBRIGATÓRIAS:
-- Apresente-se SEMPRE como {SEU_NOME}.
-- Inclua o seu portfólio de forma natural nas mensagens: {SEU_PORTFOLIO}.
-- NÃO use asteriscos (**) ou formatação markdown no texto.
-- Use SOMENTE os dados fornecidos; nunca invente fatos sobre o negócio.
-- Cite 1 detalhe real (nota, avaliações, ausência de site, etc.) de forma elogiosa e natural.
-- Tom humano, respeitoso e direto, sem parecer spam. Sem exageros, sem emoji em excesso (no máximo 1).
-- Adapte ao nicho (advocacia pede tom mais sóbrio e discreto; clínicas, acolhedor).
-- WhatsApp: até 450 caracteres, termina com pergunta simples. Inclua uma saída gentil ("se não fizer sentido, é só avisar que não incomodo mais").
-- Instagram DM: até 350 caracteres.
-- E-mail: assunto curto + corpo de 90-130 palavras.
-- followup: mensagem de WhatsApp de 3 a 5 dias depois, curta e leve.
+SYSTEM_PROMPT = f"""Você é {SEU_NOME}, desenvolvedor(a) que oferece {SUA_OFERTA}.
+O utilizador vai enviar os dados de um negócio local que precisa ser prospectado.
 
-Responda APENAS com JSON válido, com as seguintes chaves exatas: "whatsapp", "instagram", "email_assunto", "email_corpo", "followup" """
+REGRAS:
+1. Apresente-se SEMPRE como {SEU_NOME}.
+2. Inclua o seu portfólio naturalmente: {SEU_PORTFOLIO}.
+3. NÃO use asteriscos (**) ou formatação markdown.
+4. Escreva abordagens frias (WhatsApp, Instagram e Email) curtas e humanas.
+5. BUSCA DO INSTAGRAM (OBRIGATÓRIO): Utilize as suas capacidades de pesquisa na web (Google Search) para encontrar o URL oficial do Instagram do negócio fornecido. 
+
+Responda APENAS com JSON válido e fechado, com estas chaves exatas: "whatsapp", "instagram", "instagram_url", "email_assunto", "email_corpo", "followup".
+Na chave "instagram_url", forneça o link direto para o perfil encontrado na web (ex: https://instagram.com/nomedocliente). Caso a pesquisa não devolva um Instagram para o negócio, tente adivinhar o arroba mais provável, e caso não consiga, devolva uma string vazia ("").
+"""
 
 def mensagem_fallback(l: dict) -> dict:
     nome = l["nome"]
@@ -161,9 +159,13 @@ def mensagem_fallback(l: dict) -> dict:
            "Posso te mostrar uma ideia rápida, sem compromisso? "
            "Se não fizer sentido, é só avisar que não incomodo mais.")
            
+    # Fallback para o instagram: limpamos o nome para ficar um link direto com a arroba hipotética.
+    nome_limpo = re.sub(r'[^a-zA-Z0-9]', '', nome).lower()
+    
     return {
         "whatsapp": zap,
         "instagram": zap[:350],
+        "instagram_url": f"https://www.instagram.com/{nome_limpo}/",
         "email_assunto": f"Uma ideia para a presença online do(a) {nome}",
         "email_corpo": f"Olá, tudo bem?\n\n{gancho}, {dor}.\n\nTrabalho com {SUA_OFERTA} e "
                        f"gostaria de mostrar uma proposta enxuta.\n\nMeu portfólio: {SEU_PORTFOLIO}\n\nPosso enviar? "
@@ -178,7 +180,7 @@ def gerar_mensagens(l: dict, nicho: str, cliente) -> dict:
         
     dados = {k: l[k] for k in ("nome", "endereco", "site", "nota", "avaliacoes", "diagnostico")}
     dados["nicho"] = nicho
-    prompt = json.dumps(dados, ensure_ascii=False)
+    prompt = f"Negócio para pesquisar o Instagram e redigir abordagens: {json.dumps(dados, ensure_ascii=False)}"
     
     tentativas = 3
     for t in range(tentativas):
@@ -188,12 +190,14 @@ def gerar_mensagens(l: dict, nicho: str, cliente) -> dict:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
-                    response_mime_type="application/json"
+                    response_mime_type="application/json",
+                    # Ativando a ferramenta de pesquisa do Google para ele encontrar o Instagram!
+                    tools=[{"google_search": {}}]
                 )
             )
             msgs = json.loads(resp.text)
             
-            if not all(k in msgs for k in ("whatsapp", "instagram", "email_assunto", "email_corpo", "followup")):
+            if not all(k in msgs for k in ("whatsapp", "instagram", "instagram_url", "email_assunto", "email_corpo", "followup")):
                 raise ValueError("JSON incompleto")
                 
             return msgs
