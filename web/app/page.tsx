@@ -150,15 +150,16 @@ export default function Home() {
     finally { setBuscando(false); }
   };
 
+  // FUNÇÃO ATUALIZADA: Aponta para a API da Vercel
   const dispararEmail = async () => {
     if (!emailDestino.includes("@")) return alert("Por favor, digite um e-mail válido!");
     setEnviandoEmail(true);
     try {
-      await axios.post("https://prospectai-api-l98h.onrender.com/api/enviar-email", {
+      await axios.post("/api/enviar-email", {
         para: emailDestino, assunto: leadSelecionado?.mensagens?.email_assunto, corpo: leadSelecionado?.mensagens?.email_corpo
       });
       alert("E-mail enviado com sucesso!");
-    } catch (error) { alert("Erro ao enviar e-mail. Verifique o terminal do Python."); } 
+    } catch (error) { alert("Erro ao enviar e-mail. Verifique as configurações na Vercel."); } 
     finally { setEnviandoEmail(false); }
   };
 
@@ -183,7 +184,6 @@ export default function Home() {
       navigator.clipboard.writeText(texto);
       alert("Abordagem copiada! O Instagram vai abrir agora. Basta colar a mensagem no chat.");
     }
-    
     let url = lead.mensagens?.instagram_url;
     if (!url || url === "") {
       if (lead.site && lead.site.includes("instagram.com")) {
@@ -438,7 +438,6 @@ export default function Home() {
                   <a href={leadSelecionado.wa_link} target="_blank" className="flex items-center gap-2 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white border border-[#25D366]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all"><MessageCircle size={18} /> Abrir no WhatsApp</a>
                 )}
                 
-                {/* BOTÃO INSTAGRAM COM ÍCONE SVG NATIVO (Sem dependências do Lucide) */}
                 <button onClick={() => abrirInstagram(leadSelecionado)} className="flex items-center gap-2 bg-[#E1306C]/10 text-[#E1306C] hover:bg-[#E1306C] hover:text-white border border-[#E1306C]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all">
                   <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg> Abordar no Instagram
                 </button>
