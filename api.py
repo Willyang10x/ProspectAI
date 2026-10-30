@@ -3,6 +3,7 @@ import smtplib
 import json
 import requests
 import re
+import socket
 from datetime import date
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -14,6 +15,17 @@ from google import genai
 
 # Importa a inteligência do seu script original
 from prospector import buscar_places, qualificar, gerar_mensagens, wa_link
+
+# =======================================================
+# CORREÇÃO PARA O RENDER (Erro 101 Network is Unreachable)
+# Força o Python a usar a rede IPv4 para conectar ao Gmail
+# =======================================================
+old_getaddrinfo = socket.getaddrinfo
+def new_getaddrinfo(*args, **kwargs):
+    responses = old_getaddrinfo(*args, **kwargs)
+    return [response for response in responses if response[0] == socket.AF_INET]
+socket.getaddrinfo = new_getaddrinfo
+# =======================================================
 
 app = FastAPI(title="ProspectAI API")
 
@@ -121,7 +133,6 @@ def iniciar_prospeccao(req: BuscaRequest):
 
 @app.post("/api/enviar-email")
 def enviar_email(req: EmailRequest):
-    # Agora procura exatamente os nomes que estão no seu código
     remetente = os.getenv("EMAIL_REMETENTE")
     senha = os.getenv("SENHA_APP_EMAIL")
     
@@ -136,15 +147,16 @@ def enviar_email(req: EmailRequest):
         msg['Subject'] = req.assunto
         msg.attach(MIMEText(req.corpo, 'plain', 'utf-8'))
         
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
+        # Usa porta 465 (SSL Direto) que contorna bloqueios de porta 587 no Render
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         server.login(remetente, senha)
         server.send_message(msg)
         server.quit()
+        
         return {"status": "E-mail enviado com sucesso!"}
         
     except smtplib.SMTPAuthenticationError:
-        print("Erro de SMTP: Palavra-passe de App incorreta.")
+        print("Erro de SMTP: Senha de App incorreta.")
         raise HTTPException(status_code=401, detail="Falha de autenticação do Gmail. Verifique a Senha de App no Render.")
     except Exception as e:
         print(f"Erro no disparo de e-mail: {str(e)}")
