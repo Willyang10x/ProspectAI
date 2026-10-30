@@ -49,11 +49,8 @@ def extrair_email_do_site(url):
     if not url or any(x in url.lower() for x in ['instagram.com', 'facebook.com', 'wa.me', 'linktr.ee']):
         return ""
     try:
-        # Timeout de 5s para não atrasar a prospecção
         res = requests.get(url, timeout=5, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        # Busca padrões de e-mail no código HTML
         emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', res.text)
-        # Filtra lixo (imagens que o regex confunde com e-mail)
         validos = [e for e in set(emails) if not e.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif'))]
         return validos[0].lower() if validos else ""
     except:
@@ -89,8 +86,6 @@ def iniciar_prospeccao(req: BuscaRequest):
                 continue
                 
             l = qualificar(p, False)
-            
-            # Pesca o e-mail se houver um site válido
             email_encontrado = extrair_email_do_site(l.get("site"))
             
             l.update({
@@ -126,10 +121,14 @@ def iniciar_prospeccao(req: BuscaRequest):
 
 @app.post("/api/enviar-email")
 def enviar_email(req: EmailRequest):
+    # Agora procura exatamente os nomes que estão no seu código
     remetente = os.getenv("EMAIL_REMETENTE")
     senha = os.getenv("SENHA_APP_EMAIL")
+    
     if not remetente or not senha:
-        raise HTTPException(status_code=500, detail="Credenciais de e-mail não configuradas no .env")
+        print("Erro: EMAIL_REMETENTE ou SENHA_APP_EMAIL ausentes.")
+        raise HTTPException(status_code=500, detail="Credenciais de e-mail não configuradas no Render.")
+        
     try:
         msg = MIMEMultipart()
         msg['From'] = remetente
@@ -143,5 +142,10 @@ def enviar_email(req: EmailRequest):
         server.send_message(msg)
         server.quit()
         return {"status": "E-mail enviado com sucesso!"}
+        
+    except smtplib.SMTPAuthenticationError:
+        print("Erro de SMTP: Palavra-passe de App incorreta.")
+        raise HTTPException(status_code=401, detail="Falha de autenticação do Gmail. Verifique a Senha de App no Render.")
     except Exception as e:
+        print(f"Erro no disparo de e-mail: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
