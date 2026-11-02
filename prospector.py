@@ -140,13 +140,13 @@ REGRAS:
 2. Inclua o seu portfólio naturalmente: {SEU_PORTFOLIO}.
 3. NÃO use asteriscos (**) ou formatação markdown.
 4. Escreva abordagens frias (WhatsApp, Instagram e Email) curtas e humanas.
-5. BUSCA DO INSTAGRAM (OBRIGATÓRIO): Utilize as suas capacidades de pesquisa na web (Google Search) para encontrar o URL oficial do Instagram do negócio fornecido. 
+5. BUSCA DO INSTAGRAM: Tente encontrar o URL oficial do Instagram do negócio fornecido usando as ferramentas de pesquisa (Google Search).
 
-Responda APENAS com JSON válido e fechado, com estas chaves exatas: "whatsapp", "instagram", "instagram_url", "email_assunto", "email_corpo", "followup".
-Na chave "instagram_url", forneça o link direto para o perfil encontrado na web (ex: https://instagram.com/nomedocliente). Caso a pesquisa não devolva um Instagram para o negócio, tente adivinhar o arroba mais provável, e caso não consiga, devolva uma string vazia ("").
+Responda APENAS E EXCLUSIVAMENTE com o objeto JSON válido, sem texto antes ou depois, com estas chaves exatas: "whatsapp", "instagram", "instagram_url", "email_assunto", "email_corpo", "followup".
+Na chave "instagram_url", se encontrar o link oficial, coloque-o. Se NÃO tiver certeza absoluta do link, deixe a string VAZIA ("").
 """
 
-def mensagem_fallback(l: dict) -> dict:
+def mensagem_fallback(l: dict, nicho: str = "", cidade: str = "") -> dict:
     nome = l["nome"]
     gancho = (f"Vi que o(a) {nome} tem {l['avaliacoes']} avaliações no Google" if l["avaliacoes"] >= 10
               else f"Encontrei o(a) {nome} pesquisando no Google")
@@ -159,13 +159,16 @@ def mensagem_fallback(l: dict) -> dict:
            "Posso te mostrar uma ideia rápida, sem compromisso? "
            "Se não fizer sentido, é só avisar que não incomodo mais.")
            
-    # Fallback para o instagram: limpamos o nome para ficar um link direto com a arroba hipotética.
-    nome_limpo = re.sub(r'[^a-zA-Z0-9]', '', nome).lower()
+    termo_busca = f"site:instagram.com {nome} {cidade}"
+    url_pesquisa_google = f"https://www.google.com/search?q={quote(termo_busca)}"
+    
+    # Adicionando um pequeno atraso mesmo no fallback para manter o ritmo seguro
+    time.sleep(2)
     
     return {
         "whatsapp": zap,
         "instagram": zap[:350],
-        "instagram_url": f"https://www.instagram.com/{nome_limpo}/",
+        "instagram_url": url_pesquisa_google,
         "email_assunto": f"Uma ideia para a presença online do(a) {nome}",
         "email_corpo": f"Olá, tudo bem?\n\n{gancho}, {dor}.\n\nTrabalho com {SUA_OFERTA} e "
                        f"gostaria de mostrar uma proposta enxuta.\n\nMeu portfólio: {SEU_PORTFOLIO}\n\nPosso enviar? "
@@ -176,7 +179,7 @@ def mensagem_fallback(l: dict) -> dict:
 
 def gerar_mensagens(l: dict, nicho: str, cliente) -> dict:
     if cliente is None:
-        return mensagem_fallback(l)
+        return mensagem_fallback(l, nicho, l.get("cidade", ""))
         
     dados = {k: l[k] for k in ("nome", "endereco", "site", "nota", "avaliacoes", "diagnostico")}
     dados["nicho"] = nicho
@@ -190,25 +193,33 @@ def gerar_mensagens(l: dict, nicho: str, cliente) -> dict:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
-                    response_mime_type="application/json",
-                    # Ativando a ferramenta de pesquisa do Google para ele encontrar o Instagram!
                     tools=[{"google_search": {}}]
+                    # Removido o response_mime_type pois não é suportado junto com tools
                 )
             )
-            msgs = json.loads(resp.text)
+            
+            # Limpa qualquer bloco markdown de código JSON que a IA possa retornar
+            texto = resp.text.replace("```json", "").replace("```", "").strip()
+            msgs = json.loads(texto)
             
             if not all(k in msgs for k in ("whatsapp", "instagram", "instagram_url", "email_assunto", "email_corpo", "followup")):
                 raise ValueError("JSON incompleto")
+            
+            if not msgs.get("instagram_url") or "explore/search" in msgs["instagram_url"]:
+                cidade_lead = l.get("cidade", "")
+                termo_busca = f"site:instagram.com {l['nome']} {cidade_lead}"
+                msgs["instagram_url"] = f"https://www.google.com/search?q={quote(termo_busca)}"
                 
+            time.sleep(4) # Pausa de 4 segundos para contornar o limite de 15 RPM da API Gemini
             return msgs
             
         except Exception as e:
-            if "503" in str(e) and t < tentativas - 1:
-                print(f"   - Servidor do Gemini ocupado. Tentando novamente em 3 segundos... ({t+1}/{tentativas})")
-                time.sleep(3)
+            if ("503" in str(e) or "429" in str(e)) and t < tentativas - 1:
+                print(f"   - Servidor do Gemini ocupado/rate limit. Tentando novamente em 5 segundos... ({t+1}/{tentativas})")
+                time.sleep(5)
             else:
                 print(f"   ! IA falhou para {l['nome']} ({e}); usando modelo padrão.")
-                return mensagem_fallback(l)
+                return mensagem_fallback(l, nicho, l.get("cidade", ""))
 
 def wa_link(l: dict, texto: str) -> str:
     return f"https://wa.me/{l['whatsapp']}?text={quote(texto)}" if l["whatsapp"] else ""
