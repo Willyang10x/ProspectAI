@@ -5,13 +5,13 @@ export async function POST(request: Request) {
   try {
     const { para, assunto, corpo } = await request.json();
 
-    const user = process.env.EMAIL_USER;
-    // Remove qualquer espaço em branco acidental copiado do painel do Google
-    const pass = process.env.EMAIL_PASS?.replace(/\s/g, ''); 
+    // Alterado para procurar exatamente os nomes que estão na sua Vercel
+    const user = process.env.EMAIL_REMETENTE;
+    const pass = process.env.SENHA_APP_EMAIL?.replace(/\s/g, ''); 
 
     if (!user || !pass) {
       return NextResponse.json(
-        { erro: "Variáveis EMAIL_USER ou EMAIL_PASS em falta na Vercel." },
+        { erro: "Variáveis EMAIL_REMETENTE ou SENHA_APP_EMAIL em falta na Vercel." },
         { status: 500 }
       );
     }
@@ -26,7 +26,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Testa a autenticação no Gmail antes de tentar disparar
     await transporter.verify();
 
     await transporter.sendMail({
