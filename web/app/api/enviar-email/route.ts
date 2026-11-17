@@ -5,23 +5,31 @@ export async function POST(request: Request) {
   try {
     const { para, assunto, corpo } = await request.json();
 
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    // Alterado para procurar exatamente os nomes que estão na sua Vercel
+    const user = process.env.EMAIL_REMETENTE;
+    const pass = process.env.SENHA_APP_EMAIL?.replace(/\s/g, ''); 
+
+    if (!user || !pass) {
       return NextResponse.json(
-        { erro: "Credenciais de e-mail não configuradas na Vercel." },
+        { erro: "Variáveis EMAIL_REMETENTE ou SENHA_APP_EMAIL em falta na Vercel." },
         { status: 500 }
       );
     }
 
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: user,
+        pass: pass,
       },
     });
 
+    await transporter.verify();
+
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: user,
       to: para,
       subject: assunto,
       text: corpo,
@@ -29,7 +37,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ status: "E-mail enviado com sucesso!" });
   } catch (error: any) {
-    console.error("Erro no envio do e-mail:", error);
+    console.error("Erro interno nodemailer:", error);
     return NextResponse.json({ erro: error.message }, { status: 500 });
   }
 }
