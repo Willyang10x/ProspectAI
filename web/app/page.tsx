@@ -170,17 +170,78 @@ export default function Home() {
     finally { setBuscando(false); }
   };
 
-  // FUNÇÃO ATUALIZADA: Aponta para a API da Vercel
+  // Funções de Ação em Lote (Bulk Actions)
+  const toggleLead = (id: string) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]);
+  };
+
+  const toggleColuna = (coluna: string, leadsExibidos: Lead[]) => {
+    const leadsColuna = leadsExibidos.filter(l => (l.status || "novo") === coluna);
+    const idsColuna = leadsColuna.map(l => l.id);
+    const todosSelecionados = idsColuna.every(id => selecionados.includes(id));
+
+    if (todosSelecionados) {
+      setSelecionados(prev => prev.filter(id => !idsColuna.includes(id)));
+    } else {
+      setSelecionados(prev => [...new Set([...prev, ...idsColuna])]);
+    }
+  };
+
+  const dispararLote = async () => {
+    const leadsParaEnviar = leads.filter(l => selecionados.includes(l.id) && l.email);
+    
+    if (leadsParaEnviar.length === 0) {
+      return alert("Nenhum lead selecionado possui e-mail cadastrado!");
+    }
+    
+    if (!window.confirm(`Iniciar envio automático para ${leadsParaEnviar.length} leads? Eles serão movidos para 'Contatado'.`)) {
+      return;
+    }
+
+    setEnviandoLote(true);
+    let sucesso = 0;
+
+    for (let i = 0; i < leadsParaEnviar.length; i++) {
+      const lead = leadsParaEnviar[i];
+      setProgressoLote({ atual: i + 1, total: leadsParaEnviar.length });
+      
+      try {
+        await axios.post("/api/enviar-email", {
+          para: lead.email, 
+          assunto: lead.mensagens?.email_assunto, 
+          corpo: lead.mensagens?.email_corpo
+        });
+        sucesso++;
+        mudarStatus(lead.id, "contatado");
+      } catch (error) {
+        console.error(`Erro ao enviar para ${lead.email}`);
+      }
+      
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    setEnviandoLote(false);
+    setSelecionados([]);
+    setProgressoLote({ atual: 0, total: 0 });
+    alert(`Disparo concluído! ${sucesso} e-mails enviados com sucesso.`);
+  };
+
   const dispararEmail = async () => {
     if (!emailDestino.includes("@")) return alert("Por favor, digite um e-mail válido!");
     setEnviandoEmail(true);
     try {
       await axios.post("/api/enviar-email", {
-        para: emailDestino, assunto: leadSelecionado?.mensagens?.email_assunto, corpo: leadSelecionado?.mensagens?.email_corpo
+        para: emailDestino, 
+        assunto: leadSelecionado?.mensagens?.email_assunto, 
+        corpo: leadSelecionado?.mensagens?.email_corpo
       });
       alert("E-mail enviado com sucesso!");
-    } catch (error) { alert("Erro ao enviar e-mail. Verifique as configurações na Vercel."); } 
-    finally { setEnviandoEmail(false); }
+    } catch (error: any) { 
+      const motivo = error.response?.data?.erro || error.message;
+      alert(`Erro ao enviar e-mail: ${motivo}`);
+    } finally { 
+      setEnviandoEmail(false); 
+    }
   };
 
   const excluirLead = async (id: string) => {
@@ -303,7 +364,6 @@ export default function Home() {
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-amber-500/10 blur-[120px] rounded-full animate-wave-fast"></div>
       </div>
 
-      {/* Lista nativa de sugestões de nichos */}
       <datalist id="nichos-list">
         {NICHOS_SUGERIDOS.map((item) => (
           <option key={item} value={item} />
@@ -380,7 +440,6 @@ export default function Home() {
          </form>
       </div>
 
-      {/* BARRA FLUTUANTE DE BULK ACTIONS */}
       {selecionados.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#121212]/95 backdrop-blur-2xl border border-orange-500/40 shadow-[0_0_50px_rgba(249,115,22,0.15)] rounded-2xl px-6 py-4 flex items-center gap-6 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="flex flex-col">
@@ -509,7 +568,6 @@ export default function Home() {
                   <a href={leadSelecionado.wa_link} target="_blank" className="flex items-center gap-2 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white border border-[#25D366]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all"><MessageCircle size={18} /> Abrir no WhatsApp</a>
                 )}
                 
-                {/* BOTÃO INSTAGRAM (Usando SVG Nativo para não dar erro) */}
                 <button onClick={() => abrirInstagram(leadSelecionado)} className="flex items-center gap-2 bg-[#E1306C]/10 text-[#E1306C] hover:bg-[#E1306C] hover:text-white border border-[#E1306C]/20 px-4 py-2 rounded-xl text-sm font-bold transition-all">
                   <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg> Abordar no Instagram
                 </button>
