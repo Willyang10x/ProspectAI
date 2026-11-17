@@ -4,8 +4,8 @@ import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
 import { 
   MessageCircle, Star, Globe, AlertCircle, Copy, 
-  LayoutDashboard, Target, ServerCrash, Search, GripVertical, 
-  X, MapPin, Phone, Mail, Send, Maximize2, LogOut, Lock, User, Trash2
+  LayoutDashboard, Target, ServerCrash, Search, 
+  X, MapPin, Phone, Mail, Send, LogOut, Lock, User, Trash2
 } from "lucide-react";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -32,6 +32,21 @@ type Lead = {
 
 const COLUNAS = ["novo", "contatado", "reunião", "fechado", "descartado"];
 
+const NICHOS_SUGERIDOS = [
+  "Advogados",
+  "Clínicas Médicas",
+  "Odontologia",
+  "Estética e Beleza",
+  "Imobiliárias",
+  "Arquitetura",
+  "Academias",
+  "Restaurantes",
+  "Barbearias",
+  "Pet Shops",
+  "Contabilidade",
+  "Oficinas Mecânicas"
+];
+
 export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [emailLogin, setEmailLogin] = useState("");
@@ -52,6 +67,11 @@ export default function Home() {
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [emailDestino, setEmailDestino] = useState("");
   const [enviandoEmail, setEnviandoEmail] = useState(false);
+
+  // Estados da Ação em Lote (Bulk Actions)
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [enviandoLote, setEnviandoLote] = useState(false);
+  const [progressoLote, setProgressoLote] = useState({ atual: 0, total: 0 });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -125,7 +145,7 @@ export default function Home() {
   };
 
   const mudarStatus = async (id: string, novoStatus: string) => {
-    setLeads(leads.map(l => l.id === id ? { ...l, status: novoStatus } : l));
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, status: novoStatus } : l));
     try { await axios.put(`https://prospectai-api-l98h.onrender.com/api/leads/${id}/status?status=${novoStatus}`); } 
     catch (error) { console.error("Erro ao guardar status", error); }
   };
@@ -140,27 +160,88 @@ export default function Home() {
 
   const iniciarProspeccao = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nicho || !cidade) return alert("Selecione o nicho e informe o CEP/Cidade!");
+    if (!nicho.trim() || !cidade.trim()) return alert("Digite ou selecione o nicho e informe o CEP/Cidade!");
     setBuscando(true);
     try {
-      await axios.post("https://prospectai-api-l98h.onrender.com/api/prospectar", { nicho, cidade, maximo: 10, top: 10 });
+      await axios.post("https://prospectai-api-l98h.onrender.com/api/prospectar", { nicho: nicho.trim(), cidade: cidade.trim(), maximo: 10, top: 10 });
       await carregarLeads();
       setNicho(""); setCidade(""); setCep("");
     } catch (error) { alert("Erro ao buscar. Verifique o terminal do Python."); } 
     finally { setBuscando(false); }
   };
 
-  // FUNÇÃO ATUALIZADA: Aponta para a API da Vercel
+  // Funções de Ação em Lote (Bulk Actions)
+  const toggleLead = (id: string) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]);
+  };
+
+  const toggleColuna = (coluna: string, leadsExibidos: Lead[]) => {
+    const leadsColuna = leadsExibidos.filter(l => (l.status || "novo") === coluna);
+    const idsColuna = leadsColuna.map(l => l.id);
+    const todosSelecionados = idsColuna.every(id => selecionados.includes(id));
+
+    if (todosSelecionados) {
+      setSelecionados(prev => prev.filter(id => !idsColuna.includes(id)));
+    } else {
+      setSelecionados(prev => [...new Set([...prev, ...idsColuna])]);
+    }
+  };
+
+  const dispararLote = async () => {
+    const leadsParaEnviar = leads.filter(l => selecionados.includes(l.id) && l.email);
+    
+    if (leadsParaEnviar.length === 0) {
+      return alert("Nenhum lead selecionado possui e-mail cadastrado!");
+    }
+    
+    if (!window.confirm(`Iniciar envio automático para ${leadsParaEnviar.length} leads? Eles serão movidos para 'Contatado'.`)) {
+      return;
+    }
+
+    setEnviandoLote(true);
+    let sucesso = 0;
+
+    for (let i = 0; i < leadsParaEnviar.length; i++) {
+      const lead = leadsParaEnviar[i];
+      setProgressoLote({ atual: i + 1, total: leadsParaEnviar.length });
+      
+      try {
+        await axios.post("/api/enviar-email", {
+          para: lead.email, 
+          assunto: lead.mensagens?.email_assunto, 
+          corpo: lead.mensagens?.email_corpo
+        });
+        sucesso++;
+        mudarStatus(lead.id, "contatado");
+      } catch (error) {
+        console.error(`Erro ao enviar para ${lead.email}`);
+      }
+      
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    setEnviandoLote(false);
+    setSelecionados([]);
+    setProgressoLote({ atual: 0, total: 0 });
+    alert(`Disparo concluído! ${sucesso} e-mails enviados com sucesso.`);
+  };
+
   const dispararEmail = async () => {
     if (!emailDestino.includes("@")) return alert("Por favor, digite um e-mail válido!");
     setEnviandoEmail(true);
     try {
       await axios.post("/api/enviar-email", {
-        para: emailDestino, assunto: leadSelecionado?.mensagens?.email_assunto, corpo: leadSelecionado?.mensagens?.email_corpo
+        para: emailDestino, 
+        assunto: leadSelecionado?.mensagens?.email_assunto, 
+        corpo: leadSelecionado?.mensagens?.email_corpo
       });
       alert("E-mail enviado com sucesso!");
-    } catch (error) { alert("Erro ao enviar e-mail. Verifique as configurações na Vercel."); } 
-    finally { setEnviandoEmail(false); }
+    } catch (error: any) { 
+      const motivo = error.response?.data?.erro || error.message;
+      alert(`Erro ao enviar e-mail: ${motivo}`);
+    } finally { 
+      setEnviandoEmail(false); 
+    }
   };
 
   const excluirLead = async (id: string) => {
@@ -269,7 +350,7 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans selection:bg-orange-500/30 overflow-hidden flex flex-col relative">
+    <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans selection:bg-orange-500/30 overflow-hidden flex flex-col relative pb-20">
       
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes wave-slow { 0% { transform: translate(0, 0) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0, 0) scale(1); } }
@@ -282,6 +363,13 @@ export default function Home() {
         <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-orange-600/10 blur-[150px] rounded-full animate-wave-slow"></div>
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-amber-500/10 blur-[120px] rounded-full animate-wave-fast"></div>
       </div>
+
+      {/* Lista nativa de sugestões de nichos */}
+      <datalist id="nichos-list">
+        {NICHOS_SUGERIDOS.map((item) => (
+          <option key={item} value={item} />
+        ))}
+      </datalist>
 
       <header className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between shadow-2xl shadow-black">
         <div className="flex items-center gap-6 relative z-10">
@@ -296,17 +384,15 @@ export default function Home() {
         </div>
         
         <form onSubmit={iniciarProspeccao} className="relative z-10 flex items-center gap-2 bg-[#121212] p-1.5 rounded-2xl border border-white/10 shadow-inner hidden md:flex">
-          <select value={nicho} onChange={e => setNicho(e.target.value)} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white px-4 py-2 w-40 focus:ring-0 disabled:opacity-50 cursor-pointer appearance-none hide-scrollbar">
-            <option value="" className="bg-[#121212]">Nicho...</option>
-            <option value="Advogados" className="bg-[#121212]">Advogados</option>
-            <option value="Clínicas Médicas" className="bg-[#121212]">Clínicas Médicas</option>
-            <option value="Odontologia" className="bg-[#121212]">Odontologia</option>
-            <option value="Estética e Beleza" className="bg-[#121212]">Estética e Beleza</option>
-            <option value="Imobiliárias" className="bg-[#121212]">Imobiliárias</option>
-            <option value="Arquitetura" className="bg-[#121212]">Arquitetura</option>
-            <option value="Academias" className="bg-[#121212]">Academias</option>
-            <option value="Restaurantes" className="bg-[#121212]">Restaurantes</option>
-          </select>
+          <input 
+            type="text"
+            list="nichos-list"
+            placeholder="Nicho ou busca livre..."
+            value={nicho} 
+            onChange={e => setNicho(e.target.value)} 
+            disabled={buscando} 
+            className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-48 focus:ring-0 disabled:opacity-50"
+          />
           <div className="w-px h-6 bg-white/10"></div>
           <input type="text" placeholder="CEP" value={cep} onChange={handleCepChange} maxLength={8} disabled={buscando} className="bg-transparent border-none outline-none text-sm text-white placeholder-slate-500 px-4 py-2 w-24 focus:ring-0 disabled:opacity-50 text-center"/>
           <div className="w-px h-6 bg-white/10"></div>
@@ -339,12 +425,14 @@ export default function Home() {
 
       <div className="md:hidden px-4 py-3 bg-[#0A0A0A]/50 border-b border-white/5 relative z-10">
          <form onSubmit={iniciarProspeccao} className="flex flex-col gap-2">
-            <select value={nicho} onChange={e => setNicho(e.target.value)} className="bg-[#121212] border border-white/5 text-white rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500">
-               <option value="">Selecione a Profissão...</option>
-               <option value="Advogados">Advogados</option>
-               <option value="Clínicas Médicas">Clínicas Médicas</option>
-               <option value="Odontologia">Odontologia</option>
-            </select>
+            <input 
+              type="text"
+              list="nichos-list"
+              placeholder="Digite ou escolha o nicho..."
+              value={nicho} 
+              onChange={e => setNicho(e.target.value)} 
+              className="bg-[#121212] border border-white/5 text-white placeholder-slate-500 rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500"
+            />
             <div className="flex gap-2">
               <input type="text" placeholder="CEP" value={cep} onChange={handleCepChange} maxLength={8} className="bg-[#121212] border border-white/5 text-white rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500 w-1/3 text-center"/>
               <input type="text" placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} className="bg-[#121212] border border-white/5 text-orange-400 rounded-lg p-3 text-sm focus:outline-none focus:border-orange-500 w-2/3 font-medium"/>
@@ -352,6 +440,32 @@ export default function Home() {
             <button type="submit" disabled={buscando} className="bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold p-3 rounded-lg flex justify-center items-center mt-1">Buscar Leads</button>
          </form>
       </div>
+
+      {/* BARRA FLUTUANTE DE BULK ACTIONS */}
+      {selecionados.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#121212]/95 backdrop-blur-2xl border border-orange-500/40 shadow-[0_0_50px_rgba(249,115,22,0.15)] rounded-2xl px-6 py-4 flex items-center gap-6 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <div className="flex flex-col">
+            <span className="text-white font-black text-lg">{selecionados.length} selecionados</span>
+            <span className="text-slate-400 text-xs font-semibold">Leads prontos para envio</span>
+          </div>
+          
+          <button 
+            onClick={dispararLote} 
+            disabled={enviandoLote}
+            className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-wait transition-all"
+          >
+            {enviandoLote ? (
+              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Enviando {progressoLote.atual}/{progressoLote.total}...</>
+            ) : (
+              <><Mail size={18} /> Disparar E-mails em Massa</>
+            )}
+          </button>
+          
+          <button onClick={() => setSelecionados([])} disabled={enviandoLote} className="p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-full transition-all disabled:opacity-50">
+            <X size={20} />
+          </button>
+        </div>
+      )}
 
       {loadingDados && leads.length === 0 ? (
         <div className="flex-1 flex items-center justify-center relative z-10"><div className="w-10 h-10 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div></div>
@@ -362,10 +476,18 @@ export default function Home() {
               <div key={coluna} onDragOver={onDragOver} onDrop={(e) => onDrop(e, coluna)} className="flex-1 min-w-[260px] flex flex-col gap-4 h-full">
                 
                 <div className="flex items-center justify-between bg-[#121212] border border-white/5 rounded-2xl p-3 shrink-0">
-                  <h2 className="font-extrabold text-slate-200 uppercase tracking-widest text-[11px] flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${coluna === 'novo' ? 'bg-orange-500' : coluna === 'fechado' ? 'bg-emerald-500' : coluna === 'reunião' ? 'bg-amber-400' : 'bg-slate-500'}`}></div>
-                    {coluna}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      title={`Selecionar todos de ${coluna}`}
+                      onChange={() => toggleColuna(coluna, leadsExibidos)}
+                      className="w-3.5 h-3.5 accent-orange-500 cursor-pointer"
+                    />
+                    <h2 className="font-extrabold text-slate-200 uppercase tracking-widest text-[11px] flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${coluna === 'novo' ? 'bg-orange-500' : coluna === 'fechado' ? 'bg-emerald-500' : coluna === 'reunião' ? 'bg-amber-400' : 'bg-slate-500'}`}></div>
+                      {coluna}
+                    </h2>
+                  </div>
                   <span className="bg-black text-orange-500 px-2.5 py-0.5 rounded-lg text-xs font-black">
                     {leadsExibidos.filter((l) => (l.status || "novo") === coluna).length}
                   </span>
@@ -374,11 +496,21 @@ export default function Home() {
                 <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1 pb-10 scrollbar-none">
                   {leadsExibidos.filter((l) => (l.status || "novo") === coluna).map((lead) => (
                     
-                    <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} className="group relative bg-[#121212] border border-white/5 hover:border-white/10 p-4 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing">
+                    <div key={lead.id} draggable onDragStart={(e) => onDragStart(e, lead.id)} className={`group relative bg-[#121212] border ${selecionados.includes(lead.id) ? 'border-orange-500 bg-orange-500/5' : 'border-white/5 hover:border-white/10'} p-4 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing`}>
+                      
                       <div className="flex justify-between items-start mb-3 gap-2">
-                        <h3 onClick={() => abrirFichaCompleta(lead)} className="font-bold text-white text-[15px] leading-snug hover:text-orange-400 transition-colors cursor-pointer">
-                          {lead.nome}
-                        </h3>
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <input 
+                            type="checkbox" 
+                            checked={selecionados.includes(lead.id)}
+                            onChange={() => toggleLead(lead.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`mt-1 cursor-pointer accent-orange-500 transition-opacity ${selecionados.includes(lead.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          />
+                          <h3 onClick={() => abrirFichaCompleta(lead)} className="font-bold text-white text-[15px] leading-snug hover:text-orange-400 transition-colors cursor-pointer break-words">
+                            {lead.nome}
+                          </h3>
+                        </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button onClick={(e) => { e.stopPropagation(); excluirLead(lead.id); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity p-1" title="Excluir Lead">
                             <Trash2 size={14}/>
@@ -387,12 +519,12 @@ export default function Home() {
                         </div>
                       </div>
                       
-                      <div className="text-[13px] text-slate-400 space-y-1.5 mb-4 pointer-events-none">
+                      <div className="text-[13px] text-slate-400 space-y-1.5 mb-4 pointer-events-none ml-5">
                         {lead.nota && <p className="flex items-center gap-1.5"><Star size={14} className="text-amber-400" /> <span className="text-slate-200 font-bold">{lead.nota}</span> <span className="text-slate-500">({lead.avaliacoes} avs)</span></p>}
                         <p className="flex items-start gap-1.5"><AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{lead.diagnostico}</span></p>
                       </div>
                       
-                      <button onClick={() => abrirFichaCompleta(lead)} className="w-full bg-[#1A1A1A] hover:bg-[#252525] border border-white/5 text-slate-300 py-2 rounded-lg text-sm font-semibold transition-colors">
+                      <button onClick={() => abrirFichaCompleta(lead)} className="w-full bg-[#1A1A1A] hover:bg-[#252525] border border-white/5 text-slate-300 py-2 rounded-lg text-sm font-semibold transition-colors mt-2">
                         Ver Ficha
                       </button>
                     </div>
