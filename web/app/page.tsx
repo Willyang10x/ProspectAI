@@ -137,7 +137,7 @@ export default function Home() {
   const carregarLeads = async () => {
     setLoadingDados(true);
     try {
-      const res = await axios.get("https://prospectai-api-l98h.onrender.com/api/leads");
+      const res = await axios.get("https://prospectai-7cbh.onrender.com/api/leads");
       setLeads(res.data);
       setErroServidor(false);
     } catch (error) { setErroServidor(true); } 
@@ -146,7 +146,7 @@ export default function Home() {
 
   const mudarStatus = async (id: string, novoStatus: string) => {
     setLeads(prev => prev.map(l => l.id === id ? { ...l, status: novoStatus } : l));
-    try { await axios.put(`https://prospectai-api-l98h.onrender.com/api/leads/${id}/status?status=${novoStatus}`); } 
+    try { await axios.put(`https://prospectai-7cbh.onrender.com/api/leads/${id}/status?status=${novoStatus}`); } 
     catch (error) { console.error("Erro ao guardar status", error); }
   };
 
@@ -163,7 +163,7 @@ export default function Home() {
     if (!nicho.trim() || !cidade.trim()) return alert("Digite ou selecione o nicho e informe o CEP/Cidade!");
     setBuscando(true);
     try {
-      await axios.post("https://prospectai-api-l98h.onrender.com/api/prospectar", { nicho: nicho.trim(), cidade: cidade.trim(), maximo: 10, top: 10 });
+      await axios.post("https://prospectai-7cbh.onrender.com/api/prospectar", { nicho: nicho.trim(), cidade: cidade.trim(), maximo: 10, top: 10 });
       await carregarLeads();
       setNicho(""); setCidade(""); setCep("");
     } catch (error) { alert("Erro ao buscar. Verifique o terminal do Python."); } 
